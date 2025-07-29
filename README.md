@@ -22,7 +22,8 @@ There is something important to keep in mind especially if getting frequent beta
 Now, I have tried to get around this on my Go 10.3 by writing the old, unrooted boot partitions back to the device using the same methods you will see below, and in the process soft-bricked my device and had to reinstall everything from recovery, which I must stress is kind of a pain in the butt. I'm not entirely sure what happened here. It could be that I mistook the old boot partitions from a *different* device for the ones from my Go 10.3 and that's how I screwed it up, by writing e.g. the boot partitions from my Palma 2 to my Go 10.3, unsurprisingly causing it to go kaput. (I increasingly think that's the case, honestly.) But it could also be that for whatever reason, this just doesn't work (a firmware write counter? idk, something, impossible to say), and if you want to apply an incremental update you will simply have to go into recovery and restore the firmware from there, possibly losing your data in the process (which would be fine, because you backed up anything you couldn't afford to lose before you started, right? 😉).
 
 # K, How Does This Work?
-So, first, these instructions are for Windows. If you know how to do this on other operating systems, please let me know and if you like I'll add the contents of your guide to mine or simply link to yours.
+So, first, these instructions are for Windows. For macOS instructions, see [below](#macos-instructions).
+
 You will need the following:
 * The ["EDL" utility](https://www.temblast.com/edl.htm) which is used to interface with Qualcomm devices like your Palma 2 on a lower level
 * A ["loader" file](https://github.com/bkerler/Loaders/blob/main/lenovo_motorola/0000000000000000_bdaf51b59ba21d8a_fhprg.bin) for EDL which permits it to communicate with the device correctly
@@ -81,3 +82,74 @@ Sending palma2.bin 100% ok, starting... ok, waiting for Firehose... ok
 * You can double check by opening Magisk again. One thing I would recommend is to go into the Magisk settings and block anything work or bank related from being able to see that you're rooted.
 
 Enjoy! 
+
+# macOS Instructions
+
+Use the [same loader](https://github.com/bkerler/Loaders/blob/main/lenovo_motorola/0000000000000000_bdaf51b59ba21d8a_fhprg.bin) as mentioned in the Windows instructions. Unlike the original Palma which could be rooted solely with EDL and no custom loader, this is required. If it is not included, you may see the error below[^1].
+
+First, install ADB. You can do this with Homebrew:
+
+```
+brew install android-platform-tools
+```
+
+Then install EDL via instructions [on their README](https://github.com/bkerler/edl#installation).
+
+> [!NOTE]
+> This is confirmed working with both latest Python 3.13 installed through `pyenv` or Homebrew. Was not able to get EDL installed with default macOS Python version located at `/usr/bin/python`. 
+
+> [!NOTE]
+> You may need to use this workaround to install the `pylzma` dependency:
+> 
+> ```sh
+> CFLAGS=-Wno-int-conversion pip install pylzma
+> ```
+
+Then follow same remaining steps as in the Windows instructions, adjusted for the *nix versions of ADB and EDL:
+
+```sh
+adb devices
+adb reboot edl
+edl --loader=/path/to/loader.bin r boot_a,boot_b boot_a.img,boot_b.img
+adb push ./boot_a.img /storage/emulated/0/Download
+adb push ./boot_b.img /storage/emulated/0/Download
+
+# Install Magisk on Palma, patch each image with Magisk, then run the following
+# for both boot_a.img and boot_b.img:
+adb pull /storage/emulated/0/Download/magisk_patched-{hash}.img
+mv magisk_patch-{hash.img} magisk_patch-boot_{a,b}.img
+
+# Then run:
+edl --loader=/path/to/loader.bin w boot_a ./magisk_patched-boot_a.img
+edl --loader=/path/to/loader.bin w boot_b ./magisk_patched-boot_b.img
+edl --loader=/path/to/loader.bin reset
+```
+
+### Footnotes
+
+[^1]: See example stack trace above. EDL may continue to show this error even when the loader is provided in subsequent commands until a full device restart - see thread [here](https://github.com/bkerler/edl/issues/508) for similar reports. This can be done on the Palma by holding down the lock and volume buttons.
+
+```
+Qualcomm Sahara / Firehose Client V3.62 (c) B.Kerler 2018-2024.
+main - Using loader /Users/user/Downloads/palma.bin ...
+main - Waiting for the device
+main - Device detected :)
+main - Mode detected: sahara
+Traceback (most recent call last):
+  File "/Users/user/.local/state/pyenv/versions/3.13.1/bin/edl", line 4, in <module>
+    __import__('pkg_resources').run_script('edlclient==3.62', 'edl')
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/user/.local/state/pyenv/versions/3.13.1/lib/python3.13/site-packages/pkg_resources/__init__.py", line 747, in run_script
+    self.require(requires)[0].run_script(script_name, ns)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/Users/user/.local/state/pyenv/versions/3.13.1/lib/python3.13/site-packages/pkg_resources/__init__.py", line 1734, in run_script
+    exec(code, namespace, namespace)
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/user/.local/state/pyenv/versions/3.13.1/lib/python3.13/site-packages/edlclient-3.62-py3.13.egg/EGG-INFO/scripts/edl", line 393, in <module>
+    base.run()
+    ~~~~~~~~^^
+  File "/Users/user/.local/state/pyenv/versions/3.13.1/lib/python3.13/site-packages/edlclient-3.62-py3.13.egg/EGG-INFO/scripts/edl", line 293, in run
+    version = conninfo.get("data").version
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: type object 'req' has no attribute 'version'
+```
